@@ -161,39 +161,7 @@ uv run python src/manage.py check      # Django system checks must pass
 
 ---
 
-## Architecture
-
-Business logic lives in services. Views only handle HTTP.
-
-```
-HTTP Request
-     │
-     ▼
-   View          ← parse request, return response — nothing else
-     │
-     ▼
- Serializer      ← validate input, shape output
-     │
-     ▼
-  Service        ← business logic, state changes
-   /    \
-  ▼      ▼
-Selector  Integration   ← DB reads  /  external APIs, AI, MCP
-  │
-  ▼
- Model           ← database structure
-```
-
-| Layer | Responsibility |
-|---|---|
-| View | HTTP in/out only |
-| Serializer | Input validation and API representation |
-| Service | Business logic and state changes |
-| Selector | Read-only database queries |
-| Model | Database structure and constraints |
-| Integration | External APIs, AI providers, MCP servers |
-
-### Adding a new app
+## Adding a New App
 
 ```bash
 # 1. Create the app
@@ -244,7 +212,7 @@ path("myapp/", include("apps.myapp.urls")),
 │   └── template.md             ← copy this to create a task
 │
 ├── AGENTS.md                   ← agent operating manual (read first)
-├── ARCHITECTURE.md             ← system design overview
+├── ARCHITECTURE.md             ← full system design and layer contracts
 └── docker-compose.yml
 ```
 
