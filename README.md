@@ -1,93 +1,217 @@
 # AI-Native Django Boilerplate
 
-A production-ready Django REST API scaffold designed for humans and AI coding agents.
+> **Make the repository itself the context and operating system for your coding agents.**
 
-> **Core principle:** Make the repository itself the context and operating system for your coding agents.
+A production-ready Django REST API scaffold built for AI-assisted development. The structure, documentation, and workflow are designed so a coding agent can open the repo, read a spec, implement a task, run the checks, and open a pull request — without needing a long custom prompt each time.
 
-## What This Is
-
-A starting point for Django REST API projects that are built with AI assistance from day one. The structure, documentation, and workflow conventions are designed so that a coding agent can open the repo, understand the rules, read a feature spec, implement a task, and produce a reviewable pull request — without needing a long custom prompt every time.
+---
 
 ## Stack
 
-- Python 3.13
-- Django + Django REST Framework
-- PostgreSQL
-- Redis + Celery
-- uv (package manager)
-- pytest + Ruff
+| | |
+|---|---|
+| Language | Python 3.13 |
+| Framework | Django + Django REST Framework |
+| Database | PostgreSQL |
+| Queue | Celery + Redis |
+| Packaging | uv |
+| Testing | pytest |
+| Linting | Ruff |
+
+---
 
 ## Quick Start
-
-**With Docker (recommended):**
 
 ```bash
 git clone <this-repo> myproject
 cd myproject
-cp .env.example .env          # edit DB name and SECRET_KEY
+cp .env.example .env       # set SECRET_KEY and DATABASE_URL
 docker compose up
 ```
 
-Django runs at `http://localhost:8000`. Migrations apply automatically on startup.
+Visit `http://localhost:8000/health/` — you should see `{"status": "ok"}`.
 
 **Without Docker:**
-
 ```bash
 uv sync
-cp .env.example .env          # set DATABASE_URL and SECRET_KEY
 uv run python src/manage.py migrate
 uv run python src/manage.py runserver
 ```
 
-Verify: `curl http://localhost:8000/health/` should return `{"status": "ok"}`.
+---
 
-## Starting a New Project from This Boilerplate
+## How to Start a New Project
 
-1. Clone or use this repo as a GitHub template.
-2. Find and replace `myproject` with your project name in:
-   - `pyproject.toml` (project name and description)
-   - `.env.example` (database name)
-   - `docker-compose.yml` (service names if desired)
+1. Clone this repo (or use it as a GitHub template).
+2. Find and replace `myproject` → your project name in `pyproject.toml`, `.env.example`, and `docker-compose.yml`.
 3. Update `README.md`, `AGENTS.md`, and `ARCHITECTURE.md` with your project context.
-4. Generate a new `SECRET_KEY`:
+4. Generate a fresh secret key:
    ```bash
    python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
    ```
 5. Run `docker compose up` and verify `/health/` returns 200.
-6. Create `src/config/settings/production.py` before any deployment.
 
-## How to Develop a Feature (AI-Native Workflow)
+---
+
+## The AI-Native Development Workflow
+
+This is the core of the repo. Every feature follows this cycle:
 
 ```
-1. Write a spec          →  specs/active/my-feature.md
-2. Break into tasks      →  tasks/TASK-001-my-feature.md
-3. Agent implements      →  reads AGENTS.md + spec, implements, adds tests
-4. Verify                →  pytest + ruff + django check
-5. Review & merge        →  PR
-6. Archive the spec      →  specs/active/ → specs/completed/
+1. Write a spec        →  specs/active/my-feature.md
+2. Break into tasks    →  tasks/TASK-001-my-feature.md
+                          tasks/TASK-002-my-feature.md
+3. Agent implements    →  reads AGENTS.md + spec → implements → tests
+4. Verify              →  pytest  ·  ruff check .  ·  manage.py check
+5. Open a PR           →  small, focused, reviewable
+6. Archive the spec    →  specs/active/ → specs/completed/
 ```
 
-Use the templates:
-- `specs/template.md` — feature specification template
-- `tasks/template.md` — agent task template
+### Why specs first?
 
-## Adding a New App
+A vague task like *"implement user registration"* gives an agent too much to infer. A spec defines the contract — what gets built, what the API looks like, and what done means — before a single line of code is written.
+
+### Step 1 — Write a spec
+
+Copy `specs/template.md` to `specs/active/` and fill it in:
+
+```markdown
+# User Registration
+
+## Status
+Active
+
+## Goal
+Allow new users to create an account with email and password.
+
+## User Story
+As a visitor,
+I want to register with my email and password
+so that I can access the platform.
+
+## Requirements
+- Email must be unique.
+- Password must meet Django's default validators.
+- Returns a session token on success.
+
+## API
+POST /api/v1/users/register/
+
+## Acceptance Criteria
+- New user is created and returned with HTTP 201.
+- Duplicate email returns HTTP 400.
+- Weak password returns HTTP 400 with field errors.
+- Tests cover all three cases.
+
+## Out of Scope
+- Social login.
+- Email verification.
+```
+
+### Step 2 — Break into small tasks
+
+One spec → multiple small tasks. Each task is independently implementable and testable.
+
+```
+tasks/
+  TASK-001-user-model.md
+  TASK-002-registration-service.md
+  TASK-003-registration-api.md
+```
+
+Copy `tasks/template.md` and fill it in:
+
+```markdown
+# TASK-002 — Registration Service
+
+## Related Specification
+specs/active/user-registration.md
+
+## Objective
+Implement the create_user() service function with all validation.
+
+## Files Expected
+src/apps/users/services.py
+src/apps/users/tests/test_services.py
+
+## Acceptance Criteria
+- Duplicate email raises ValidationError.
+- Weak password raises ValidationError.
+- Valid input creates and returns a User instance.
+- Tests pass.
+
+## Do Not
+- Modify URL routing.
+- Touch the view or serializer.
+```
+
+### Step 3 — Agent implements
+
+A coding agent reads `AGENTS.md` first (the operating manual), then the spec, then the task. It knows the architecture rules, the commands to run, and what "done" means — without you writing a custom prompt.
+
+### Step 4 — Verify
+
+The agent runs all three checks before declaring the task complete:
 
 ```bash
-# 1. Create the app directory
+uv run pytest                          # tests must pass
+uv run ruff check .                    # lint must pass
+uv run python src/manage.py check      # Django system checks must pass
+```
+
+---
+
+## Architecture
+
+Business logic lives in services. Views only handle HTTP.
+
+```
+HTTP Request
+     │
+     ▼
+   View          ← parse request, return response — nothing else
+     │
+     ▼
+ Serializer      ← validate input, shape output
+     │
+     ▼
+  Service        ← business logic, state changes
+   /    \
+  ▼      ▼
+Selector  Integration   ← DB reads  /  external APIs, AI, MCP
+  │
+  ▼
+ Model           ← database structure
+```
+
+| Layer | Responsibility |
+|---|---|
+| View | HTTP in/out only |
+| Serializer | Input validation and API representation |
+| Service | Business logic and state changes |
+| Selector | Read-only database queries |
+| Model | Database structure and constraints |
+| Integration | External APIs, AI providers, MCP servers |
+
+### Adding a new app
+
+```bash
+# 1. Create the app
 mkdir -p src/apps/myapp/tests
 touch src/apps/myapp/{__init__.py,apps.py,models.py,selectors.py,services.py,serializers.py,views.py,urls.py,admin.py}
 touch src/apps/myapp/migrations/__init__.py
 touch src/apps/myapp/tests/{__init__.py,test_models.py,test_services.py,test_views.py}
-
-# 2. Register in INSTALLED_APPS
-# src/config/settings/base.py → add "apps.myapp"
-
-# 3. Register URL routes
-# src/config/api_v1.py → add path("myapp/", include("apps.myapp.urls"))
 ```
 
-Each layer has a single responsibility — see `ARCHITECTURE.md` for the full contract.
+```python
+# 2. Register in INSTALLED_APPS — src/config/settings/base.py
+"apps.myapp",
+
+# 3. Register routes — src/config/api_v1.py
+path("myapp/", include("apps.myapp.urls")),
+```
+
+---
 
 ## Project Structure
 
@@ -96,70 +220,86 @@ Each layer has a single responsibility — see `ARCHITECTURE.md` for the full co
 │   ├── manage.py
 │   ├── config/
 │   │   ├── settings/
-│   │   │   ├── base.py         # Shared settings, env-driven
-│   │   │   ├── local.py        # Dev overrides
-│   │   │   └── production.py   # Create this before deploying
-│   │   ├── urls.py
-│   │   ├── api_v1.py           # All /api/v1/ routes
-│   │   ├── asgi.py
-│   │   └── wsgi.py
+│   │   │   ├── base.py         # shared settings, env-driven
+│   │   │   ├── local.py        # dev overrides
+│   │   │   └── production.py   # create this before deploying
+│   │   ├── api_v1.py           # all /api/v1/ routes
+│   │   └── urls.py
 │   └── apps/
-│       ├── health/             # Health check endpoint (keep this)
-│       └── <your-domain>/      # Add your domain apps here
+│       ├── health/             # health check — keep this
+│       └── <your-domain>/      # add your apps here
+│
 ├── docs/
-│   ├── architecture/           # Architecture notes per concern
-│   ├── decisions/              # ADRs (why we chose X)
-│   ├── features/               # Feature-level documentation
-│   └── deployment/             # Local, staging, production guides
+│   ├── architecture/           # how the system is designed
+│   ├── decisions/              # ADRs — why we chose X
+│   ├── features/               # feature-level docs
+│   └── deployment/             # local, staging, production guides
+│
 ├── specs/
-│   ├── active/                 # In-progress feature specs
-│   ├── completed/              # Done specs (archived here)
-│   └── template.md
+│   ├── active/                 # in-progress specs
+│   ├── completed/              # archived after merge
+│   └── template.md             ← copy this to start a spec
+│
 ├── tasks/
-│   └── template.md             # Agent-friendly task template
-├── tests/                      # Project-wide integration / e2e tests
-├── AGENTS.md                   # Agent operating manual (read first)
-├── ARCHITECTURE.md             # System design overview
+│   └── template.md             ← copy this to create a task
+│
+├── AGENTS.md                   ← agent operating manual (read first)
+├── ARCHITECTURE.md             ← system design overview
 └── docker-compose.yml
 ```
+
+---
 
 ## Key Commands
 
 ```bash
-uv run python src/manage.py runserver   # Dev server
-uv run pytest                           # All tests
-uv run ruff check .                     # Lint
-uv run ruff format .                    # Format
-uv run python src/manage.py check       # Django system checks
+uv run python src/manage.py runserver        # dev server
+uv run pytest                                # run all tests
+uv run ruff check .                          # lint
+uv run ruff format .                         # format
+uv run python src/manage.py check            # Django system checks
 uv run python src/manage.py makemigrations <app>
 uv run python src/manage.py migrate
 ```
 
-## API Versioning
-
-All routes live under `/api/v1/`. Register new apps in `src/config/api_v1.py`.
-
-When a breaking change requires v2: create `src/config/api_v2.py` and add `path("api/v2/", include(("config.api_v2", "v2")))` to `config/urls.py`. Views can branch on `request.version`.
+---
 
 ## Environment Variables
 
-| Variable              | Required | Default                    | Notes                      |
-|-----------------------|----------|----------------------------|----------------------------|
-| `SECRET_KEY`          | Yes      | —                          | Fails at startup if missing |
-| `DATABASE_URL`        | No       | SQLite                     | Parsed by dj-database-url  |
-| `REDIS_URL`           | No       | `redis://localhost:6379/0` | Celery broker              |
-| `ALLOWED_HOSTS`       | No       | `localhost,127.0.0.1`      | Comma-separated            |
-| `CORS_ALLOWED_ORIGINS`| No       | `""` (empty)               | Comma-separated            |
-| `DEBUG`               | No       | `False`                    | Set `True` for local dev   |
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `SECRET_KEY` | Yes | — | Fails at startup if missing |
+| `DATABASE_URL` | No | SQLite | Parsed by dj-database-url |
+| `REDIS_URL` | No | `redis://localhost:6379/0` | Celery broker |
+| `ALLOWED_HOSTS` | No | `localhost,127.0.0.1` | Comma-separated |
+| `CORS_ALLOWED_ORIGINS` | No | `""` | Comma-separated |
+| `DEBUG` | No | `False` | Set `True` for local dev |
+
+---
+
+## Definition of Done
+
+A task is complete only when all of these pass:
+
+- [ ] Acceptance criteria from the spec are satisfied
+- [ ] Tests are added for new behavior
+- [ ] `uv run pytest` passes
+- [ ] `uv run ruff check .` passes
+- [ ] `uv run python src/manage.py check` passes
+- [ ] Documentation updated if architecture changed
+
+---
 
 ## Contributing
 
-1. Read `AGENTS.md` and `ARCHITECTURE.md`.
-2. Write a spec in `specs/active/` before implementing.
+1. Read `AGENTS.md` and `ARCHITECTURE.md` first.
+2. Write a spec in `specs/active/` before implementing anything.
 3. Keep business logic in services, not views.
-4. Add tests for new behavior.
-5. Ensure `pytest`, `ruff check .`, and `manage.py check` all pass.
+4. Add tests for every new behavior.
+5. All checks must pass before opening a PR.
+
+---
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
