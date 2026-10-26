@@ -55,6 +55,8 @@ uv run python src/manage.py runserver
 
 ## The AI-Native Development Workflow
 
+> For a full explanation with worked examples, see [WORKFLOW.md](WORKFLOW.md).
+
 This is the core of the repo. Every feature follows this cycle:
 
 ```
@@ -213,6 +215,7 @@ path("myapp/", include("apps.myapp.urls")),
 │
 ├── AGENTS.md                   ← agent operating manual (read first)
 ├── ARCHITECTURE.md             ← full system design and layer contracts
+├── WORKFLOW.md                 ← how to build features with AI (with examples)
 └── docker-compose.yml
 ```
 
